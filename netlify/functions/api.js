@@ -38,6 +38,15 @@ exports.handler = async (event) => {
     return json(500, { error: 'NETLIFY_API_TOKEN environment variable not set' });
   }
 
+  // Password protection
+  const appPassword = process.env.APP_PASSWORD;
+  if (appPassword) {
+    const provided = event.headers['x-app-password'] ?? '';
+    if (provided !== appPassword) {
+      return json(401, { error: 'Unauthorized' });
+    }
+  }
+
   // event.path keeps the original path before redirect (e.g. /api/sites/abc123)
   const siteIdMatch = event.path.match(/\/api\/sites\/([^/]+)/);
   const siteId = siteIdMatch?.[1] ?? null;

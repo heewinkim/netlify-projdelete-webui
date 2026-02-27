@@ -462,16 +462,122 @@
       color: var(--text-3);
     }
 
+    /* ─── Login overlay ──────────────────────── */
+    .login-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 400;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+      background-image:
+        radial-gradient(ellipse 70% 40% at 50% 0%, rgba(59, 130, 246, 0.07) 0%, transparent 65%);
+      animation: fadeIn 0.3s ease both;
+    }
+    .login-overlay.hidden { display: none; }
+
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    .login-card {
+      width: 100%;
+      max-width: 360px;
+      padding: 44px 40px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+      animation: slideUp 0.35s cubic-bezier(.2,0,0,1) both;
+    }
+
+    @keyframes slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+
+    .login-logo .logo-eyebrow { margin-bottom: 8px; }
+    .login-logo h1 {
+      font-family: 'Syne', sans-serif;
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      line-height: 1;
+    }
+    .login-logo h1 .dot { color: var(--accent); }
+
+    .login-form { display: flex; flex-direction: column; gap: 10px; }
+
+    .login-input {
+      width: 100%;
+      padding: 11px 14px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      color: var(--text-1);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      letter-spacing: 0.1em;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .login-input:focus { border-color: var(--accent); }
+    .login-input::placeholder { color: var(--text-3); letter-spacing: 0; }
+
+    .btn-unlock {
+      padding: 11px;
+      background: var(--accent);
+      border: none;
+      border-radius: 9px;
+      color: #fff;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .btn-unlock:hover    { opacity: 0.88; }
+    .btn-unlock:disabled { opacity: 0.45; cursor: default; }
+
+    .login-error {
+      font-size: 12.5px;
+      color: var(--danger);
+      text-align: center;
+      min-height: 18px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
     /* ─── Responsive ──────────────────────────── */
     @media (max-width: 640px) {
       .wrap         { padding: 0 20px; }
       header        { padding: 36px 0 28px; flex-direction: column; align-items: flex-start; }
       .grid         { grid-template-columns: 1fr; }
       .toast-container { bottom: 20px; right: 16px; left: 16px; }
+      .login-card   { margin: 20px; padding: 36px 28px; }
     }
   </style>
 </head>
 <body>
+
+<!-- Login overlay -->
+<div id="loginOverlay" class="login-overlay hidden">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="logo-eyebrow">netlify</div>
+      <h1>Projects<span class="dot">.</span></h1>
+    </div>
+    <form class="login-form" onsubmit="handleLogin(event)">
+      <input
+        id="pwdInput"
+        class="login-input"
+        type="password"
+        placeholder="Password"
+        autocomplete="current-password"
+        autofocus
+      />
+      <button class="btn-unlock" id="btnUnlock" type="submit">Unlock</button>
+    </form>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
 
 <div class="wrap">
   <!-- Header -->
@@ -517,6 +623,76 @@
 
 <script>
   let sites = [];
+  let appPassword = sessionStorage.getItem('app_pwd') ?? '';
+
+  /* ── Auth ────────────────────────────────────── */
+  function showLogin(errorMsg = '') {
+    document.getElementById('loginOverlay').classList.remove('hidden');
+    document.getElementById('loginError').textContent = errorMsg;
+    document.getElementById('pwdInput').value = '';
+    setTimeout(() => document.getElementById('pwdInput').focus(), 50);
+  }
+
+  function hideLogin() {
+    document.getElementById('loginOverlay').classList.add('hidden');
+  }
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    const pwd = document.getElementById('pwdInput').value.trim();
+    if (!pwd) return;
+
+    const btn = document.getElementById('btnUnlock');
+    btn.disabled = true;
+    btn.textContent = 'Checking…';
+
+    try {
+      const res = await fetch('/api/sites', {
+        headers: { 'X-App-Password': pwd },
+      });
+
+      if (res.status === 401) {
+        document.getElementById('loginError').textContent = 'Wrong password';
+        document.getElementById('pwdInput').value = '';
+        document.getElementById('pwdInput').focus();
+        return;
+      }
+
+      appPassword = pwd;
+      sessionStorage.setItem('app_pwd', pwd);
+      hideLogin();
+
+      const data = await res.json();
+      if (res.ok) {
+        sites = Array.isArray(data) ? data : [];
+        renderCards(sites);
+        setStatus('connected', `${sites.length} sites`);
+        document.getElementById('countNum').textContent = sites.length;
+        document.getElementById('lastUpdated').textContent =
+          `Updated ${new Date().toLocaleTimeString()}`;
+      }
+    } catch (e) {
+      document.getElementById('loginError').textContent = 'Connection failed';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Unlock';
+    }
+  }
+
+  /* 비밀번호 포함 fetch 래퍼 */
+  async function apiFetch(url, opts = {}) {
+    const res = await fetch(url, {
+      ...opts,
+      headers: { ...(opts.headers ?? {}), 'X-App-Password': appPassword },
+    });
+    if (res.status === 401) {
+      sessionStorage.removeItem('app_pwd');
+      appPassword = '';
+      showLogin('Session expired. Please re-enter password.');
+      throw new Error('Unauthorized');
+    }
+    return res;
+  }
 
   /* ── Helpers ─────────────────────────────────── */
   function esc(str) {
@@ -659,7 +835,7 @@
     card.classList.add('is-deleting');
 
     try {
-      const res = await fetch(`/api/sites/${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/sites/${id}`, { method: 'DELETE' });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error || `HTTP ${res.status}`);
@@ -690,7 +866,7 @@
     renderSkeleton();
 
     try {
-      const res  = await fetch('/api/sites');
+      const res  = await apiFetch('/api/sites');
       const data = await res.json();
 
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -714,7 +890,12 @@
     }
   }
 
-  loadSites();
+  // 세션에 비밀번호 없으면 로그인 화면
+  if (!appPassword) {
+    showLogin();
+  } else {
+    loadSites();
+  }
 </script>
 </body>
 </html>
