@@ -1,0 +1,17 @@
+[build]
+  publish = "public"
+  functions = "netlify/functions"
+
+# /api/sites → serverless function
+[[redirects]]
+  from = "/api/sites"
+  to = "/.netlify/functions/api"
+  status = 200
+  force = true
+
+# /api/sites/:id → serverless function (path preserved via event.path)
+[[redirects]]
+  from = "/api/sites/*"
+  to = "/.netlify/functions/api"
+  status = 200
+  force = true

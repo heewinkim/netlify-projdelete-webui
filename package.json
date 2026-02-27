@@ -1,0 +1,14 @@
+{
+  "name": "netlify-project-manager",
+  "version": "1.0.0",
+  "description": "Netlify project manager with delete functionality",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "js-yaml": "^4.1.0"
+  }
+}
